@@ -20,7 +20,6 @@ from utils import (
     ClassifierType,
     NaiveClassifier,
     char_tokenizer,
-    save_json,
     set_seed,
     subword_tokenizer,
     unigram_tokenizer,
@@ -44,23 +43,6 @@ ts_df["label_str"] = ts_df["label"].apply(
     lambda x: hf_ds["test"].info.features["label"].int2str(x)
 )
 
-# %%
-
-# all_in_one_classifer = AllInOneClassifier.load("data/final-model")
-
-# W = 1000
-# preds = [
-#     res
-#     for i in trange(0, ts_df.shape[0], W)
-#     for res in all_in_one_classifer.predict(ts_df["sentence"].values[i : i + W])
-# ]
-
-# report = classification_report(ts_df["label_str"], preds)
-# print(report)
-# exit()
-
-
-#### remove puncs
 # %%
 
 char_set = set()
@@ -287,9 +269,6 @@ for lang in report.index:
 
 # %%
 
-save_json(lang_classifiers, "data/langs-detector.json")
-# %%
-
 temp_labels = sorted(set(list(curr_ts_df["label_str"].unique()) + list(preds)))
 conf_matrix = confusion_matrix(curr_ts_df["label_str"], preds, labels=temp_labels)
 
@@ -307,6 +286,7 @@ plt.show()
 print(curr_ts_df[(preds == "bos") & (curr_ts_df["label_str"] == "bos")])
 
 # I checked some 'hbs' and 'hrv' languages in the google translate. all of them were crotian. maybe it is also hard for google to detect it they are same langs and it is the problem of the datset
+#### remove puncs
 
 # bos but google detected crotians:
 # U periodu do 9. vijeka brojna mala kraljevstva...

@@ -229,7 +229,6 @@ class AllInOneClassifier(BaseClassifer):
 
         preds = [None] * len(sentences)
         for clf_type, clf in self.ordered_classifiers.items():
-            print(clf_type)
             clf_predictions = np.array(clf.predict(sentences))
             mask = np.array(
                 [
