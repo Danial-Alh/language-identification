@@ -1,12 +1,12 @@
+import enum
 import json
 import os
 import pickle
 from collections import Counter, defaultdict
 from typing import Callable
-
 import numpy as np
 import pandas as pd
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, save_npz, load_npz
 
 import random
 
@@ -14,6 +14,18 @@ import random
 def set_seed(seed: int):
     np.random.seed(seed)
     random.seed(seed)
+
+
+def char_tokenizer(x: str):
+    return x
+
+
+def unigram_tokenizer(x: str):
+    return x.split()
+
+
+def subword_tokenizer(x: str, w: int):
+    return [x[i : i + w] for i in range(0, len(x), w)]
 
 
 def save_pickle(obj, filepath):
@@ -29,6 +41,19 @@ def load_pickle(filepath):
         return pickle.load(f)
 
 
+def save_json(obj, filepath):
+    folderpath = "/".join(filepath.split("/")[:-1])
+    if folderpath:
+        os.makedirs(folderpath, exist_ok=True)
+    with open(filepath, "w") as f:
+        json.dump(obj, f)
+
+
+def load_json(filepath):
+    with open(filepath) as f:
+        return json.load(f)
+
+
 class ClassEncoder:
     def __init__(self, values=None, itos=None) -> None:
         assert not (values is None and itos is None)
@@ -41,18 +66,28 @@ class ClassEncoder:
     def save(self, path):
         path = path.rstrip("/")
         os.makedirs(path, exist_ok=True)
-        with open(f"{path}/itos.json", "w") as f:
-            json.dump(self.itos, f)
+        save_json(self.itos, f"{path}/itos.json")
 
-    @staticmethod
-    def load(path) -> "ClassEncoder":
+    @classmethod
+    def load(cls, path) -> "ClassEncoder":
         path = path.rstrip("/")
-        with open(f"{path}/itos.json") as f:
-            itos = json.load(f)
+        itos = load_json(f"{path}/itos.json")
         return ClassEncoder(itos=itos)
 
 
-class NaivePredictor:
+class BaseClassifer:
+    def predict(self, sentences: list[str]) -> list[str]:
+        pass
+
+    def save(self, path: str):
+        pass
+
+    @classmethod
+    def load(cls, path: str):
+        pass
+
+
+class NaiveClassifier(BaseClassifer):
     def __init__(
         self,
         tokenize_fn: Callable[[str], list[str]],
@@ -123,17 +158,17 @@ class NaivePredictor:
         save_pickle(self.tokenize_fn, f"{path}/tokenize-fn.pkl")
         self.lang_encoder.save(f"{path}/lang-encoder")
         self.token_encoder.save(f"{path}/token-encoder")
-        np.save(f"{path}/token-lang-scores.npy", self.token_lang_scores)
+        save_npz(f"{path}/token-lang-scores.npz", self.token_lang_scores)
 
-    @staticmethod
-    def load(path: str) -> "NaivePredictor":
+    @classmethod
+    def load(cls, path: str) -> "NaiveClassifier":
         path = path.rstrip("/")
         tokenize_fn = load_pickle(f"{path}/tokenize-fn.pkl")
         lang_encoder = ClassEncoder.load(f"{path}/lang-encoder")
         token_encoder = ClassEncoder.load(f"{path}/token-encoder")
-        token_lang_scores = np.load(f"{path}/token-lang-scores.npy")
+        token_lang_scores = load_npz(f"{path}/token-lang-scores.npz")
 
-        return NaivePredictor(
+        return NaiveClassifier(
             tokenize_fn=tokenize_fn,
             lang_encoder=lang_encoder,
             token_encoder=token_encoder,
@@ -141,13 +176,102 @@ class NaivePredictor:
         )
 
 
-def char_tokenizer(x: str):
-    return x
+class MLPClassifier(BaseClassifer):
+    def __init__(self, mlp_model, tfidf_model):
+        self.mlp_model = mlp_model
+        self.tfidf_model = tfidf_model
+
+    def predict(self, sentences: list[str]) -> list[str]:
+        X = self.tfidf_model.transform(sentences)
+        return self.mlp_model.predict(X)
+
+    def save(self, path: str):
+        path = path.rstrip("/")
+        os.makedirs(path, exist_ok=True)
+
+        save_pickle(self.mlp_model, f"{path}/mlp-model.pkl")
+        save_pickle(self.tfidf_model, f"{path}/tfidf-model.pkl")
+
+    @classmethod
+    def load(cls, path: str):
+        mlp_model = load_pickle(f"{path}/mlp-model.pkl")
+        tfidf_model = load_pickle(f"{path}/tfidf-model.pkl")
+        return MLPClassifier(mlp_model=mlp_model, tfidf_model=tfidf_model)
 
 
-def unigram_tokenizer(x: str):
-    return x.split()
+class ClassifierType(enum.StrEnum):
+    NaiveChar = "naive-char"
+    NaiveUnigram = "naive-unigram"
+    NaiveSubword = "naive-subword"
+    MLP = "mlp"
 
 
-def subword_tokenizer(x: str, w: int):
-    return [x[i : i + w] for i in range(0, len(x), w)]
+classifier_type2classifier: dict[ClassifierType, BaseClassifer] = {
+    ClassifierType.NaiveChar: NaiveClassifier,
+    ClassifierType.NaiveUnigram: NaiveClassifier,
+    ClassifierType.NaiveSubword: NaiveClassifier,
+    ClassifierType.MLP: MLPClassifier,
+}
+
+
+class AllInOneClassifier(BaseClassifer):
+    def __init__(
+        self,
+        ordered_classifiers: dict[ClassifierType, BaseClassifer],
+        lang2classifier_type: dict[str, ClassifierType],
+    ) -> None:
+        self.ordered_classifiers = ordered_classifiers
+        self.lang2classifier_type = lang2classifier_type
+
+    def predict(self, sentences: list[str]):
+        sentences = np.array(sentences)
+        sentence_indices = np.arange(len(sentences))
+
+        preds = [None] * len(sentences)
+        for clf_type, clf in self.ordered_classifiers.items():
+            print(clf_type)
+            clf_predictions = np.array(clf.predict(sentences))
+            mask = np.array(
+                [
+                    self.lang2classifier_type[pred] == clf_type
+                    for pred in clf_predictions
+                ]
+            )
+
+            for idx, pred in zip(
+                sentence_indices[mask], clf_predictions[mask], strict=True
+            ):
+                preds[idx] = pred
+
+            sentences = sentences[~mask]
+            sentence_indices = sentence_indices[~mask]
+
+            if sentences.shape[0] == 0:
+                break
+        assert sentences.shape[0] == 0
+        assert not any([res is None for res in preds])
+
+        return preds
+
+    def save(self, path: str):
+        path = path.rstrip("/")
+        os.makedirs(path, exist_ok=True)
+        for clf_type, clf in self.ordered_classifiers.items():
+            clf.save(f"{path}/{clf_type}")
+        save_json(self.lang2classifier_type, f"{path}/langs-classifier.json")
+        save_json(
+            list(self.ordered_classifiers.keys()), f"{path}/classifier-orders.json"
+        )
+
+    @classmethod
+    def load(cls, path: str):
+        classifier_orders = load_json(f"{path}/classifier-orders.json")
+        ordered_classifiers = {}
+        for clf_type in classifier_orders:
+            clf = classifier_type2classifier[clf_type].load(f"{path}/{clf_type}")
+            ordered_classifiers[clf_type] = clf
+        lang2classifier_type = load_json(f"{path}/langs-classifier.json")
+        return AllInOneClassifier(
+            ordered_classifiers=ordered_classifiers,
+            lang2classifier_type=lang2classifier_type,
+        )

@@ -15,13 +15,18 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.neural_network import MLPClassifier
 from tqdm.auto import trange
 from utils import (
+    AllInOneClassifier,
     ClassEncoder,
-    NaivePredictor,
+    ClassifierType,
+    NaiveClassifier,
     char_tokenizer,
+    save_json,
+    set_seed,
     subword_tokenizer,
     unigram_tokenizer,
-    save_pickle,
-    set_seed
+)
+from utils import (
+    MLPClassifier as BundeledMLPClassifier,
 )
 
 # %%
@@ -38,6 +43,24 @@ tr_df["label_str"] = tr_df["label"].apply(
 ts_df["label_str"] = ts_df["label"].apply(
     lambda x: hf_ds["test"].info.features["label"].int2str(x)
 )
+
+# %%
+
+# all_in_one_classifer = AllInOneClassifier.load("data/final-model")
+
+# W = 1000
+# preds = [
+#     res
+#     for i in trange(0, ts_df.shape[0], W)
+#     for res in all_in_one_classifer.predict(ts_df["sentence"].values[i : i + W])
+# ]
+
+# report = classification_report(ts_df["label_str"], preds)
+# print(report)
+# exit()
+
+
+#### remove puncs
 # %%
 
 char_set = set()
@@ -50,21 +73,20 @@ print(f"{len(char_set)=}")
 # %%
 
 lang_encoder = ClassEncoder(tr_df["label_str"])
-langs_detector = {}
+lang_classifiers = {}
 acceptable_f1 = 0.8
 seed = 1324809
 set_seed(seed=seed)
 
 # %%
 
-char_predictor = NaivePredictor(tokenize_fn=char_tokenizer, lang_encoder=lang_encoder)
-char_predictor.fit(tr_df)
-
+char_model = NaiveClassifier(tokenize_fn=char_tokenizer, lang_encoder=lang_encoder)
+char_model.fit(tr_df)
 
 iloc = 0
 print(
     "char predictor test:",
-    char_predictor.predict([tr_df.iloc[iloc]["sentence"]]),
+    char_model.predict([tr_df.iloc[iloc]["sentence"]]),
     "label:",
     tr_df.iloc[iloc]["label_str"],
 )
@@ -75,7 +97,7 @@ W = 1000
 preds = [
     res
     for i in trange(0, ts_df.shape[0], W)
-    for res in char_predictor.predict(ts_df["sentence"].values[i : i + W])
+    for res in char_model.predict(ts_df["sentence"].values[i : i + W])
 ]
 
 report = classification_report(ts_df["label_str"], preds)
@@ -83,6 +105,7 @@ print(report)
 report = pd.DataFrame(
     classification_report(ts_df["label_str"], preds, output_dict=True)
 ).T
+report = report[report.index.isin(lang_encoder.stoi)]
 
 # %%
 
@@ -95,9 +118,7 @@ print(
 )
 
 for lang in report[report["f1-score"] >= acceptable_f1].index:
-    langs_detector[lang] = "char"
-
-char_predictor.save("data/char-model")
+    lang_classifiers[lang] = ClassifierType.NaiveChar
 
 # %%
 remaining_langs = set(report[report["f1-score"] <= 0.8].index.values)
@@ -106,10 +127,10 @@ curr_ts_df = ts_df[ts_df["label_str"].isin(remaining_langs)]
 
 # %%
 
-unigram_predictor = NaivePredictor(unigram_tokenizer, lang_encoder)
-unigram_predictor.fit(curr_tr_df)
+unigram_model = NaiveClassifier(unigram_tokenizer, lang_encoder)
+unigram_model.fit(curr_tr_df)
 
-unigram_predictor.predict([curr_tr_df.iloc[0]["sentence"]])  # test
+unigram_model.predict([curr_tr_df.iloc[0]["sentence"]])  # test
 
 # %%
 
@@ -117,7 +138,7 @@ W = 1000
 preds = [
     res
     for i in trange(0, curr_ts_df.shape[0], W)
-    for res in unigram_predictor.predict(curr_ts_df["sentence"].values[i : i + W])
+    for res in unigram_model.predict(curr_ts_df["sentence"].values[i : i + W])
 ]
 
 report = classification_report(curr_ts_df["label_str"], preds)
@@ -125,6 +146,7 @@ print(report)
 report = pd.DataFrame(
     classification_report(curr_ts_df["label_str"], preds, output_dict=True)
 ).T
+report = report[report.index.isin(lang_encoder.stoi)]
 
 # %%
 plt.hist(report["f1-score"])
@@ -137,9 +159,8 @@ print(
 
 
 for lang in report[report["f1-score"] >= acceptable_f1].index:
-    langs_detector[lang] = "unigram"
+    lang_classifiers[lang] = ClassifierType.NaiveUnigram
 
-unigram_predictor.save("data/unigram-model")
 # %%
 remaining_langs = set(report[report["f1-score"] <= 0.8].index.values)
 curr_tr_df = tr_df[tr_df["label_str"].isin(remaining_langs)]
@@ -148,19 +169,19 @@ curr_ts_df = ts_df[ts_df["label_str"].isin(remaining_langs)]
 
 subword_len = 3
 
-subword_predictor = NaivePredictor(
+subword_model = NaiveClassifier(
     tokenize_fn=partial(subword_tokenizer, w=subword_len), lang_encoder=lang_encoder
 )
-subword_predictor.fit(curr_tr_df)
+subword_model.fit(curr_tr_df)
 
-subword_predictor.predict([curr_tr_df.iloc[0]["sentence"]])  # test
+subword_model.predict([curr_tr_df.iloc[0]["sentence"]])  # test
 
 # %%
 W = 1000
 preds = [
     res
     for i in trange(0, curr_ts_df.shape[0], W)
-    for res in subword_predictor.predict(curr_ts_df["sentence"].values[i : i + W])
+    for res in subword_model.predict(curr_ts_df["sentence"].values[i : i + W])
 ]
 
 report = classification_report(curr_ts_df["label_str"], preds)
@@ -168,6 +189,7 @@ print(report)
 report = pd.DataFrame(
     classification_report(curr_ts_df["label_str"], preds, output_dict=True)
 ).T
+report = report[report.index.isin(lang_encoder.stoi)]
 
 print(
     "lanuguages detected with subwords:",
@@ -175,9 +197,7 @@ print(
 )
 
 for lang in report[report["f1-score"] >= acceptable_f1].index:
-    langs_detector[lang] = "subword"
-
-subword_predictor.save("data/subword-model")
+    lang_classifiers[lang] = ClassifierType.NaiveSubword
 
 # %%
 remaining_langs = set(report[report["f1-score"] < acceptable_f1].index.values)
@@ -247,23 +267,27 @@ mlp_model = MLPClassifier(
 )
 
 mlp_model.fit(X, curr_tr_df["label_str"])
+mlp_model = BundeledMLPClassifier(mlp_model=mlp_model, tfidf_model=tfidf_model)
+
 
 print("predicting")
-preds = mlp_model.predict(X_ts)
+preds = mlp_model.predict(curr_ts_df["sentence"])
 
 report = classification_report(curr_ts_df["label_str"], preds)
 print(report)
 report = pd.DataFrame(
     classification_report(curr_ts_df["label_str"], preds, output_dict=True)
 ).T
+report = report[report.index.isin(lang_encoder.stoi)]
 
 print("lanuguages detected with mlp classifier:", report.shape[0])
 
 for lang in report.index:
-    langs_detector[lang] = "mlp"
+    lang_classifiers[lang] = ClassifierType.MLP
 
-save_pickle(mlp_model, "data/mlp-model")
+# %%
 
+save_json(lang_classifiers, "data/langs-detector.json")
 # %%
 
 temp_labels = sorted(set(list(curr_ts_df["label_str"].unique()) + list(preds)))
@@ -299,4 +323,31 @@ print(curr_ts_df[(preds == "bos") & (curr_ts_df["label_str"] == "bos")])
 
 # google agreed on bos:
 # Modernizovana verzija Leopard 2 tenka, modernizovana ...
+# %%
+all_in_one_classifer = AllInOneClassifier(
+    ordered_classifiers={
+        ClassifierType.NaiveChar: char_model,
+        ClassifierType.NaiveUnigram: unigram_model,
+        ClassifierType.NaiveSubword: subword_model,
+        ClassifierType.MLP: mlp_model,
+    },
+    lang2classifier_type=lang_classifiers,
+)
+
+all_in_one_classifer.save("data/final-model")
+
+
+all_in_one_classifer = AllInOneClassifier.load("data/final-model")
+
+# %%
+W = 1000
+preds = [
+    res
+    for i in trange(0, ts_df.shape[0], W)
+    for res in all_in_one_classifer.predict(ts_df["sentence"].values[i : i + W])
+]
+
+report = classification_report(ts_df["label_str"], preds)
+print(report)
+
 # %%
