@@ -1,7 +1,7 @@
 # %%
 # %load_ext autoreload
 # %autoreload 2
-
+# %cd ..
 # %%
 from functools import partial
 
@@ -15,9 +15,13 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.neural_network import MLPClassifier
 from tqdm.auto import trange
 
-from models import AllInOneClassifier, ClassEncoder, ClassifierType
-from models import MLPClassifier as BundeledMLPClassifier
-from models import (
+from language_identification.models import (
+    AllInOneClassifier,
+    ClassEncoder,
+    ClassifierType,
+)
+from language_identification.models import MLPClassifier as BundeledMLPClassifier
+from language_identification.models import (
     NaiveClassifier,
     char_tokenizer,
     set_seed,

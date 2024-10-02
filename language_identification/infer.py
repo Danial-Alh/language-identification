@@ -1,6 +1,6 @@
 import sys
 
-from models import AllInOneClassifier
+from language_identification.models import AllInOneClassifier
 
 classifer = AllInOneClassifier.load("data/final-model")
 print("model loaded.")
