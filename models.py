@@ -7,6 +7,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, load_npz, save_npz
+
 from utils import load_json, load_pickle, save_json, save_pickle
 
 

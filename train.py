@@ -9,24 +9,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from datasets import load_dataset
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.neural_network import MLPClassifier
+from tqdm.auto import trange
+
+from models import AllInOneClassifier, ClassEncoder, ClassifierType
+from models import MLPClassifier as BundeledMLPClassifier
 from models import (
-    AllInOneClassifier,
-    ClassEncoder,
-    ClassifierType,
     NaiveClassifier,
     char_tokenizer,
     set_seed,
     subword_tokenizer,
     unigram_tokenizer,
 )
-from models import (
-    MLPClassifier as BundeledMLPClassifier,
-)
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.neural_network import MLPClassifier
-from tqdm.auto import trange
 
 # %%
 
