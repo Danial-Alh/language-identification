@@ -1,7 +1,8 @@
 # %%
-# %load_ext autoreload
-# %autoreload 2
-# %cd ..
+#!%load_ext autoreload
+#!%autoreload 2
+#!%cd ..
+
 # %%
 from functools import partial
 
@@ -61,6 +62,8 @@ acceptable_f1 = 0.8
 seed = 1324809
 set_seed(seed=seed)
 
+# %% [markdown]
+# # Character model
 # %%
 
 char_model = NaiveClassifier(tokenize_fn=char_tokenizer, lang_encoder=lang_encoder)
@@ -108,6 +111,8 @@ remaining_langs = set(report[report["f1-score"] <= 0.8].index.values)
 curr_tr_df = tr_df[tr_df["label_str"].isin(remaining_langs)]
 curr_ts_df = ts_df[ts_df["label_str"].isin(remaining_langs)]
 
+# %% [markdown]
+# # Unigram model
 # %%
 
 unigram_model = NaiveClassifier(unigram_tokenizer, lang_encoder)
@@ -148,6 +153,9 @@ for lang in report[report["f1-score"] >= acceptable_f1].index:
 remaining_langs = set(report[report["f1-score"] <= 0.8].index.values)
 curr_tr_df = tr_df[tr_df["label_str"].isin(remaining_langs)]
 curr_ts_df = ts_df[ts_df["label_str"].isin(remaining_langs)]
+
+# %% [markdown]
+# # Subword model
 # %%
 
 subword_len = 3
@@ -217,6 +225,8 @@ plt.show(block=False)
 curr_tr_df = tr_df[tr_df["label_str"].isin(remaining_langs)]
 curr_ts_df = ts_df[ts_df["label_str"].isin(remaining_langs)]
 
+# %% [markdown]
+# # Tfidf + Logistic Regression and MLP models
 # %%
 
 tfidf_model = TfidfVectorizer(
@@ -287,24 +297,8 @@ plt.show(block=False)
 
 print(curr_ts_df[(preds == "bos") & (curr_ts_df["label_str"] == "bos")])
 
-# I checked some 'hbs' and 'hrv' languages in the google translate. all of them were crotian. maybe it is also hard for google to detect it they are same langs and it is the problem of the datset
-#### remove puncs
-
-# bos but google detected crotians:
-# U periodu do 9. vijeka brojna mala kraljevstva...
-# Rodio se u Zürichu, Švicarska gdje je na ETH p...
-# Prva procjena Michaela Todda za proračun filma...
-# Američka mornarica je tako razvila i posebnu...
-# Terorizam je smišljena upotreba nezakonitog...
-# Interni monolog: kada glumac priča kao da se o...
-
-# bos but correctly predicted and google disagreed:
-# Ovo sve ukazuje na to da je velika mogučnost ...
-# Suprotno uvriježenom mišljenju, velika većina ...
-# Košljoribe su su primitivna ektotermne (hladnokrvne), ...
-
-# google agreed on bos:
-# Modernizovana verzija Leopard 2 tenka, modernizovana ...
+# %% [markdown]
+# # All in one final model
 # %%
 all_in_one_classifer = AllInOneClassifier(
     ordered_classifiers={
