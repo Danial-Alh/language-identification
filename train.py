@@ -9,12 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from datasets import load_dataset
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.neural_network import MLPClassifier
-from tqdm.auto import trange
-from utils import (
+from models import (
     AllInOneClassifier,
     ClassEncoder,
     ClassifierType,
@@ -24,9 +19,14 @@ from utils import (
     subword_tokenizer,
     unigram_tokenizer,
 )
-from utils import (
+from models import (
     MLPClassifier as BundeledMLPClassifier,
 )
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.neural_network import MLPClassifier
+from tqdm.auto import trange
 
 # %%
 
@@ -92,7 +92,7 @@ report = report[report.index.isin(lang_encoder.stoi)]
 # %%
 
 plt.hist(report["f1-score"])
-plt.show()
+plt.show(block=False)
 
 print(
     "lanuguages detected with chars:",
@@ -132,7 +132,7 @@ report = report[report.index.isin(lang_encoder.stoi)]
 
 # %%
 plt.hist(report["f1-score"])
-plt.show()
+plt.show(block=False)
 
 print(
     "lanuguages detected with unigrams:",
@@ -210,7 +210,7 @@ ax.set_yticks(np.arange(len(temp_labels)), labels=temp_labels)  # true
 for i in range(len(temp_labels)):
     for j in range(len(temp_labels)):
         text = ax.text(j, i, conf_matrix[i, j], ha="center", va="center", color="w")
-plt.show()
+plt.show(block=False)
 
 # %%
 curr_tr_df = tr_df[tr_df["label_str"].isin(remaining_langs)]
@@ -280,7 +280,8 @@ ax.set_yticks(np.arange(len(temp_labels)), labels=temp_labels)  # true
 for i in range(len(temp_labels)):
     for j in range(len(temp_labels)):
         text = ax.text(j, i, conf_matrix[i, j], ha="center", va="center", color="w")
-plt.show()
+plt.show(block=False)
+
 # %%
 
 print(curr_ts_df[(preds == "bos") & (curr_ts_df["label_str"] == "bos")])
